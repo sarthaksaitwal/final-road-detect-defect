@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Road Defect Detection</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+            background: #111;
+            color: white;
+        }
+
+        video,
+        canvas {
+            width: 100%;
+            max-width: 400px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>📱 Road Defect Detection</h2>
+
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <p id="gps"></p>
+
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+
+        let latitude = null;
+        let longitude = null;
+
+        // ========================
+        // GET GPS LOCATION
+        // ========================
+        navigator.geolocation.getCurrentPosition(position => {
+            latitude = position.coords.latitude;
+            longitude = position.coords.longitude;
+            document.getElementById("gps").innerText =
+                "Lat: " + latitude + " | Lon: " + longitude;
+        });
+
+        // ========================
+        // OPEN MOBILE CAMERA
+        // ========================
+        navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" }
+        })
+            .then(stream => {
+                video.srcObject = stream;
+            });
+
+        // ========================
+        // REAL-TIME DETECTION
+        // ========================
+        async function detect() {
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            ctx.drawImage(video, 0, 0);
+
+            const blob = await new Promise(resolve =>
+                canvas.toBlob(resolve, "image/jpeg")
+            );
+
+            const formData = new FormData();
+            formData.append("file", blob);
+            formData.append("lat", latitude);
+            formData.append("lon", longitude);
+
+            const response = await fetch("/predict", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+
+            ctx.drawImage(video, 0, 0);
+
+            data.detections.forEach(det => {
+                const [x1, y1, x2, y2] = det.bbox;
+
+                ctx.strokeStyle = "red";
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+            });
+        }
+
+        setInterval(detect, 400);
+    </script>
+
+</body>
+
+</html>
